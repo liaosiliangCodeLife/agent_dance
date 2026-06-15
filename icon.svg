@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d0d1a"/>
+      <stop offset="100%" style="stop-color:#1a1030"/>
+    </linearGradient>
+    <filter id="glow"><feGaussianBlur stdDeviation="3"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <filter id="soft"><feGaussianBlur stdDeviation="8"/><feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <!-- 节点裁剪圆 -->
+    <clipPath id="circle30"><circle cx="0" cy="0" r="30"/></clipPath>
+  </defs>
+
+  <!-- 背景 -->
+  <rect width="512" height="512" rx="115" fill="url(#bg)"/>
+
+  <!-- 中心光晕 -->
+  <circle cx="256" cy="256" r="70" fill="#7c3aed" opacity="0.08" filter="url(#soft)"/>
+
+  <!-- 连线 -->
+  <g filter="url(#glow)" opacity="0.3">
+    <!-- 五边形 -->
+    <polygon points="256,96 408,207 350,385 162,385 104,207" fill="none" stroke="#a78bfa" stroke-width="1.5"/>
+    <!-- 星型到中心 -->
+    <line x1="256" y1="96" x2="256" y2="256" stroke="#a78bfa" stroke-width="2"/>
+    <line x1="408" y1="207" x2="256" y2="256" stroke="#a78bfa" stroke-width="2"/>
+    <line x1="350" y1="385" x2="256" y2="256" stroke="#a78bfa" stroke-width="2"/>
+    <line x1="162" y1="385" x2="256" y2="256" stroke="#a78bfa" stroke-width="2"/>
+    <line x1="104" y1="207" x2="256" y2="256" stroke="#a78bfa" stroke-width="2"/>
+  </g>
+
+  <!-- ====== 节点1: Hermes (顶部) — 翅膀/头盔抽象 ====== -->
+  <g transform="translate(256,96)" filter="url(#glow)">
+    <circle cx="0" cy="0" r="30" fill="#1e1b4b" stroke="#7c3aed" stroke-width="2"/>
+    <!-- 简化的翅膀符号 -->
+    <path d="M-12,8 Q-8,-10 0,-14 Q8,-10 12,8 L8,12 Q4,-2 0,-6 Q-4,-2 -8,12 Z" fill="#a78bfa" opacity="0.9"/>
+    <text x="0" y="24" text-anchor="middle" font-size="7" fill="#c4b5fd" font-family="sans-serif">HERMES</text>
+  </g>
+
+  <!-- ====== 节点2: OpenClaw (右上) — 爪子 ====== -->
+  <g transform="translate(408,207)" filter="url(#glow)">
+    <circle cx="0" cy="0" r="30" fill="#1a0a0a" stroke="#ef4444" stroke-width="2"/>
+    <!-- 简化的爪子 -->
+    <circle cx="-8" cy="-4" r="5" fill="#fca5a5"/>
+    <circle cx="0" cy="-6" r="5" fill="#fca5a5"/>
+    <circle cx="8" cy="-4" r="5" fill="#fca5a5"/>
+    <path d="M-8,-4 L-10,8 L-3,5 Z" fill="#fca5a5"/>
+    <path d="M0,-6 L0,8 L-3,5 Z" fill="#fca5a5"/>
+    <path d="M8,-4 L10,8 L3,5 Z" fill="#fca5a5"/>
+    <text x="0" y="24" text-anchor="middle" font-size="6" fill="#fca5a5" font-family="sans-serif">OPENCLAW</text>
+  </g>
+
+  <!-- ====== 节点3: Claude Code (右下) — 几何菱形 ====== -->
+  <g transform="translate(350,385)" filter="url(#glow)">
+    <circle cx="0" cy="0" r="30" fill="#1a0f0a" stroke="#f59e0b" stroke-width="2"/>
+    <!-- Anthropic 风格的菱形 -->
+    <path d="M0,-14 L10,0 L0,14 L-10,0 Z" fill="#f59e0b" opacity="0.4"/>
+    <path d="M0,-12 L8,0 L0,12 L-8,0 Z" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    <circle cx="0" cy="0" r="3" fill="#f59e0b"/>
+    <text x="0" y="24" text-anchor="middle" font-size="6" fill="#fde68a" font-family="sans-serif">CLAUDE</text>
+  </g>
+
+  <!-- ====== 节点4: Cursor (左下) — 方块+箭头 ====== -->
+  <g transform="translate(162,385)" filter="url(#glow)">
+    <circle cx="0" cy="0" r="30" fill="#0a0a1a" stroke="#6366f1" stroke-width="2"/>
+    <!-- 方块 -->
+    <rect x="-10" y="-10" width="20" height="20" rx="3" fill="#6366f1" opacity="0.3"/>
+    <!-- 光标箭头 -->
+    <path d="M-14,14 L-6,-2 L0,-6 L6,-2 L14,14 L-6,2 Z" fill="#818cf8"/>
+    <text x="0" y="24" text-anchor="middle" font-size="6" fill="#a5b4fc" font-family="sans-serif">CURSOR</text>
+  </g>
+
+  <!-- ====== 节点5: OpenAI (左上) — 六边形 ====== -->
+  <g transform="translate(104,207)" filter="url(#glow)">
+    <circle cx="0" cy="0" r="30" fill="#0a0a0a" stroke="#22c55e" stroke-width="2"/>
+    <!-- OpenAI 六边形花 -->
+    <g opacity="0.9">
+      <path d="M0,-12 L7,-6 L7,6 L0,12 L-7,6 L-7,-6 Z" fill="none" stroke="#4ade80" stroke-width="1.2"/>
+      <path d="M0,-9 L5.2,-4.5 L5.2,4.5 L0,9 L-5.2,4.5 L-5.2,-4.5 Z" fill="#22c55e" opacity="0.4"/>
+      <circle cx="0" cy="0" r="2.5" fill="#4ade80"/>
+    </g>
+    <text x="0" y="24" text-anchor="middle" font-size="6" fill="#86efac" font-family="sans-serif">OPENAI</text>
+  </g>
+
+  <!-- 中心节点（Agent Dance） -->
+  <g filter="url(#glow)">
+    <circle cx="256" cy="256" r="32" fill="#fff"/>
+    <circle cx="256" cy="256" r="28" fill="#7c3aed"/>
+    <text x="256" y="263" text-anchor="middle" font-size="16" font-weight="bold" fill="#fff" font-family="sans-serif">AD</text>
+  </g>
+
+  <!-- 环绕弧线 -->
+  <g filter="url(#glow)" opacity="0.2">
+    <ellipse cx="256" cy="256" rx="158" ry="118" fill="none" stroke="#a78bfa" stroke-width="1" stroke-dasharray="8,24" transform="rotate(-15 256 256)"/>
+    <ellipse cx="256" cy="256" rx="158" ry="118" fill="none" stroke="#67e8f9" stroke-width="1" stroke-dasharray="8,24" transform="rotate(45 256 256)"/>
+    <ellipse cx="256" cy="256" rx="158" ry="118" fill="none" stroke="#f59e0b" stroke-width="1" stroke-dasharray="8,24" transform="rotate(105 256 256)"/>
+  </g>
+</svg>

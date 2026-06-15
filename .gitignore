@@ -1,0 +1,60 @@
+# === Miscellaneous ===
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# === IDE & Editor ===
+*.iml
+*.ipr
+*.iws
+.idea/
+.vscode/
+
+# === Flutter / Dart ===
+.dart_tool/
+.pub-cache/
+.pub/
+/build/
+/coverage/
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# === Android ===
+android/.gradle/
+android/.kotlin/
+android/local.properties
+android/key.properties
+android/app/debug/
+android/app/profile/
+android/app/release/
+android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+*.jks
+*.keystore
+
+# === iOS ===
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/.last_build_id
+ios/Flutter/Generated.xcconfig
+ios/Runner/GeneratedPluginRegistrant.*
+
+# === Symbolication ===
+app.*.symbols
+app.*.map.json
+
+# === Build artifacts ===
+*.apk
+*.ipa
+
+# === Sensitive ===
+.env
+!.env.example
