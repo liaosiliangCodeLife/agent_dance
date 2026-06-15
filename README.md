@@ -53,6 +53,8 @@ Every message is a fresh conversation — no history carried over. This keeps in
 
 ### Screenshots
 
+▶️ **[观看演示视频](docs/8c65a076943dacf8cd3367a186ccc8e3.mp4)**
+
 <p align="center">
   <img src="docs/微信图片_20260615205648_66_5.jpg" width="45%" alt="Agents tab">
   &nbsp;
