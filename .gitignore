@@ -58,3 +58,9 @@ app.*.map.json
 # === Sensitive ===
 .env
 !.env.example
+
+# === Internal docs ===
+AGENTS.md
+function_list.md
+test_case_all.md
+test_report.md

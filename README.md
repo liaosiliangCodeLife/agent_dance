@@ -49,8 +49,6 @@ Today, interacting with AI agents (Hermes, Claude Code, OpenClaw, etc.) remotely
 
 Every message is a fresh conversation — no history carried over. This keeps interactions lean, stateless, and private. Your chat screen shows the current exchange only.
 
-> Full feature list (127 items): [function_list.md](./function_list.md)
-
 ### Screenshots
 
 ▶️ **[观看演示视频](docs/8c65a076943dacf8cd3367a186ccc8e3.mp4)**
@@ -168,9 +166,7 @@ agent_dance/
 │   └── api-contract.md              # API specification (OpenAI-compatible)
 ├── assets/
 │   └── icon.png                     # App icon
-├── AGENTS.md                        # Cursor rules & implementation guide
 ├── production_describe.md           # Product vision & roadmap
-├── function_list.md                 # Numbered feature checklist (127 items)
 └── pubspec.yaml
 ```
 
@@ -180,9 +176,7 @@ agent_dance/
 
 | Document | Purpose |
 |----------|---------|
-| [AGENTS.md](./AGENTS.md) | Technical constraints, data models, component specs — for AI coding assistants |
 | [production_describe.md](./production_describe.md) | Product vision, user personas, P2P architecture vision |
-| [function_list.md](./function_list.md) | Complete feature checklist (F-101 ~ F-507) |
 | [protocol/api-contract.md](./protocol/api-contract.md) | HTTP API contract between app and Hermes Agent |
 
 ---
