@@ -65,6 +65,53 @@ Every message is a fresh conversation — no history carried over. This keeps in
 
 ---
 
+## Quick Start
+
+Get up and running in three steps — zero to first chat in minutes.
+
+### 🖥️ Step 1: Download & Start the Desktop Server
+
+Agent Dance requires a desktop machine running the server component (your personal AI gateway). Download the right version for your platform:
+
+| Platform | Download |
+|----------|----------|
+| **Windows** | Go to [Releases page](https://github.com/liaosiliangCodeLife/agent_dance/releases) → Download `agent_dance_server_windows_x64.exe` |
+| **macOS** | Go to [Releases page](https://github.com/liaosiliangCodeLife/agent_dance/releases) → Download `agent_dance_server_macos.dmg` |
+
+> Already running [Hermes Agent](https://hermes-agent.nousresearch.com)? Just enable its API Server — no additional download needed.
+
+### ⚙️ Step 2: Configure & Launch
+
+Open the desktop app. The configuration panel only needs three fields:
+
+| Setting | Description |
+|---------|-------------|
+| **Server** | Your personal server address. On LAN, enter `0.0.0.0` or your local IP (e.g. `192.168.1.100`). For remote access, enter your NPS / frp tunnel address |
+| **Key** | A custom API key of your choosing. This key authenticates the mobile app when it connects |
+| **Protocol** | Default **TCP** (stable and reliable) |
+
+Once configured, click **Start** — the desktop server begins listening for connections from your mobile device.
+
+> Configuration workflow: Set Server (personal address) → Set Key (your secret) → Keep default TCP → Start service
+
+### 📱 Step 3: Connect from Your Phone
+
+Install the Agent Dance mobile app and connect it to the server you just configured:
+
+1. **Install the App**: Download the APK from the [Releases page](https://github.com/liaosiliangCodeLife/agent_dance/releases) (Android). iOS users can install via TestFlight
+2. **Add a Server**: Open the App → tap the **Servers** tab (bottom nav) → tap **+**
+3. **Fill in the connection details**:
+   - **Name**: Give your server a label (e.g. "Home PC", "Office Server")
+   - **Address**: Enter the same Server address you set on the desktop (LAN: `192.168.x.x`, remote: tunnel address)
+   - **Port**: Default `8642`
+   - **API Key**: Enter the same Key you set on the desktop
+4. **Test Connection**: Tap **Test Connection** — if it passes, the config is saved automatically
+5. **Start Chatting**: Go back to the **Agents** tab → tap your server → type your first message
+
+> 💡 **Same LAN** gives you the lowest latency. For **remote access**, use NPS / frp to tunnel through NAT, or a public IP.
+
+---
+
 ## Architecture
 
 ```
