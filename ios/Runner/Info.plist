@@ -65,6 +65,15 @@
 	<string>需要访问相册以选择图片发送</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>使用面容 ID 锁定 App</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.brtc.agentdance.agent_dance.background</string>
+	</array>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
