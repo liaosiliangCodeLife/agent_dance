@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:agent_dance/config/app_config.dart';
 import 'package:flutter/material.dart';
 
 /// 服务器图标预设库（F-215）
@@ -155,8 +156,11 @@ class UserAvatar extends StatelessWidget {
 
     final path = avatarPath;
     if (path != null && path.isNotEmpty && File(path).existsSync()) {
+      // 同路径覆盖写入时需 revision 打破 FileImage 缓存
+      final revision = AppConfig.userProfile.revision;
       return CircleAvatar(
         radius: radius,
+        key: ValueKey('user-avatar-$path-$revision'),
         backgroundImage: FileImage(File(path)),
       );
     }

@@ -1,7 +1,19 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
+
+/// 用户资料（头像、昵称）变更通知，供各页面监听刷新
+class UserProfileNotifier extends ChangeNotifier {
+  int revision = 0;
+
+  void notifyChanged() {
+    revision++;
+    notifyListeners();
+  }
+}
 
 /// 应用常量与配置读写
 class AppConfig {
@@ -16,6 +28,8 @@ class AppConfig {
   );
 
   static SharedPreferences? _prefs;
+
+  static final UserProfileNotifier userProfile = UserProfileNotifier();
 
   static Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -39,16 +53,23 @@ class AppConfig {
 
   static Future<void> setNickname(String value) async {
     await prefs.setString('nickname', value);
+    userProfile.notifyChanged();
   }
 
   static String? get userAvatarPath => prefs.getString('user_avatar_path');
 
   static Future<void> setUserAvatarPath(String path) async {
     await prefs.setString('user_avatar_path', path);
+    final file = File(path);
+    if (file.existsSync()) {
+      PaintingBinding.instance.imageCache.evict(FileImage(file));
+    }
+    userProfile.notifyChanged();
   }
 
   static Future<void> clearUserAvatarPath() async {
     await prefs.remove('user_avatar_path');
+    userProfile.notifyChanged();
   }
 
   static ThemeMode get themeMode {

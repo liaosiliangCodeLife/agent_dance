@@ -49,6 +49,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _inputFocusNode.addListener(_onInputFocusChanged);
     widget.viewModel.attachUi();
     widget.viewModel.addListener(_onVmChanged);
+    AppConfig.userProfile.addListener(_onUserProfileChanged);
     unawaited(_initChat());
     _loadServerIconIfNeeded();
   }
@@ -71,6 +72,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _scrollToBottom(animated: true);
       }
     });
+  }
+
+  void _onUserProfileChanged() {
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   Future<void> _initChat() async {
@@ -101,6 +108,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void dispose() {
     widget.viewModel.removeListener(_onVmChanged);
+    AppConfig.userProfile.removeListener(_onUserProfileChanged);
     _textController.removeListener(_onTextChanged);
     _inputFocusNode.removeListener(_onInputFocusChanged);
     _inputFocusNode.dispose();
@@ -182,7 +190,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
 
     return Scaffold(
-      resizeToAvoidBottomInset: true,
+      // 手动用 viewInsets 顶起输入栏，避免 bottomNavigationBar 被键盘盖住
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: Row(
           children: [
@@ -227,18 +236,23 @@ class _ChatScreenState extends State<ChatScreen> {
               },
             ),
           ),
+          AnimatedPadding(
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.easeOut,
+            padding: EdgeInsets.only(bottom: inset),
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (vm.toolProgressMessage != null)
+                    ToolProgressBar(message: vm.toolProgressMessage!),
+                  _buildInputBar(vm, isBusy),
+                ],
+              ),
+            ),
+          ),
         ],
-      ),
-      bottomNavigationBar: SafeArea(
-        top: false,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (vm.toolProgressMessage != null)
-              ToolProgressBar(message: vm.toolProgressMessage!),
-            _buildInputBar(vm, isBusy),
-          ],
-        ),
       ),
     );
   }
