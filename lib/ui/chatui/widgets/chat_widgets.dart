@@ -4,7 +4,7 @@ import 'dart:typed_data';
 import 'package:agent_dance/agents/models/message.dart';
 import 'package:agent_dance/ui/common/avatar_widgets.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// 思考过程折叠区
