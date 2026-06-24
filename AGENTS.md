@@ -627,7 +627,7 @@ ChatScreen(sessionId: ..., sessionTitle: ..., serverId: ...)
 ## 思考中读秒 (F-139, v3.3)
 
 ### 效果
-发送消息后、首 token 到达前，AI 气泡内显示"思考中... 0.0s"，每 100ms 递增，收到第一个 content 或 reasoning token 时停止。
+发送消息后、首 token 到达前，AI 气泡内显示"思考中(0.0s)....."，每 100ms 递增，收到第一个 content 或 reasoning token 时停止。
 
 ### 实现
 
@@ -641,10 +641,10 @@ final ValueNotifier<String> thinkingLabel = ValueNotifier('');
 void _startThinkingTimer() {
   _thinkingSeconds = 0;
   _thinkingTimer?.cancel();
-  thinkingLabel.value = '思考中... 0.0s';
+  thinkingLabel.value = '思考中(0.0s).....';
   _thinkingTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
     _thinkingSeconds += 0.1;
-    thinkingLabel.value = '思考中... ${_thinkingSeconds.toStringAsFixed(1)}s';
+    thinkingLabel.value = '思考中(${_thinkingSeconds.toStringAsFixed(1)}s).....';
   });
 }
 
