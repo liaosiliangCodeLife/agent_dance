@@ -211,6 +211,8 @@ class AgentsSseClient {
 
     String? currentEvent;
     final buffer = StringBuffer();
+    var accumulatedContent = '';
+    var accumulatedReasoning = '';
 
     await for (final chunk in response.stream.transform(utf8.decoder)) {
       buffer.write(chunk);
@@ -263,14 +265,22 @@ class AgentsSseClient {
 
           final reasoning = delta['reasoning_content']?.toString();
           if (reasoning != null && reasoning.isNotEmpty) {
-            yield SseReasoning(text: reasoning);
-            await _yieldFrame();
+            final reasoningInc = takeStreamingIncrement(reasoning, accumulatedReasoning);
+            accumulatedReasoning = reasoningInc.$1;
+            if (reasoningInc.$2 != null) {
+              yield SseReasoning(text: reasoningInc.$2!);
+              await _yieldFrame();
+            }
           }
 
           final contentToken = delta['content']?.toString();
           if (contentToken != null && contentToken.isNotEmpty) {
-            yield SseToken(text: contentToken);
-            await _yieldFrame();
+            final contentInc = takeStreamingIncrement(contentToken, accumulatedContent);
+            accumulatedContent = contentInc.$1;
+            if (contentInc.$2 != null) {
+              yield SseToken(text: contentInc.$2!);
+              await _yieldFrame();
+            }
           }
         } catch (e, st) {
           _log.warn('SSE 解析失败', {'line': line, 'error': e.toString(), 'stack': st.toString()});
@@ -365,6 +375,13 @@ class AgentsSseClient {
                 yield SseReasoning(text: reasoningInc.$2!);
                 await _yieldFrame();
               }
+              break;
+            case 'hermes.tool.progress':
+            case 'agents.tool.progress':
+            case 'tool.progress':
+              yield SseToolProgress(
+                message: eventJson['message']?.toString() ?? '工具执行中...',
+              );
               break;
             case 'run.completed':
               final output = eventJson['output']?.toString() ?? '';

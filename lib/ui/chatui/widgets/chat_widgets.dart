@@ -7,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+/// iMessage 风格用户消息气泡蓝
+const Color _kUserMessageBubbleBlue = Color(0xFF007AFF);
+
 /// 思考过程折叠区
 class ThinkingSection extends StatefulWidget {
   const ThinkingSection({
@@ -130,7 +133,7 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final isUser = message.isUser;
     final bg = isUser
-        ? Theme.of(context).colorScheme.primaryContainer
+        ? _kUserMessageBubbleBlue
         : Theme.of(context).colorScheme.surfaceContainerHighest;
 
     final bubble = Container(
@@ -161,7 +164,10 @@ class MessageBubble extends StatelessWidget {
               },
             )
           else
-            Text(message.content),
+            Text(
+              message.content,
+              style: const TextStyle(color: Colors.white, fontSize: 15),
+            ),
           if (message.hasImages) ...[
             const SizedBox(height: 8),
             Wrap(
