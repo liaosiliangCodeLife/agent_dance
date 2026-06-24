@@ -550,5 +550,74 @@
 - 切换服务器再回来，对话历史还在
 - 退出App再打开，历史从 SQLite 恢复
 
-*文档版本: v3.1*
+*文档版本: v3.2*
 *日期: 2026-06-24*
+
+---
+
+## 服务器 → 会话 → 对话三级结构（v3.2 新增）
+
+### 需求来源
+`function_list.md` Tab 1 重构为三级：服务器列表 → 会话列表 → 聊天页。每个服务器下可有多个独立会话，每个会话有独立 UUID 作为 API 的 `X-Hermes-Session-Id`。
+
+### 架构变更
+
+```
+改前：服务器列表 → 直接进聊天（一个服务器 = 一个聊天）
+改后：服务器列表 → 会话列表 → 聊天（一个服务器 = N 个独立会话）
+```
+
+### 数据结构
+
+Session 表（SQLite drift 定义）：
+
+```
+sessions:
+  id          TEXT PRIMARY KEY  -- UUID，也是 API 的 X-Hermes-Session-Id
+  server_id   TEXT NOT NULL     -- 外键，关联服务器
+  title       TEXT NOT NULL     -- 会话标题，默认"新对话 YYYY-MM-DD"
+  created_at  INT NOT NULL      -- Unix 毫秒
+  updated_at  INT NOT NULL      -- 最后活跃时间
+```
+
+Message 表已有 `session_id` 字段，无需改表结构。
+
+### 需改动的文件
+
+| 文件 | 改动内容 |
+|------|---------|
+| **新增** `lib/ui/sessionui/session_list_screen.dart` | 会话列表页：ListView + FAB 新建按钮 + 左滑删除 + 长按改标题 |
+| **新增** `lib/ui/sessionui/session_list_tile.dart` | 会话列表项组件：标题 + 最后消息时间 + 最后消息预览 |
+| **新增** `lib/agents/viewmodels/session_list_viewmodel.dart` | 会话列表状态管理：增删改查 |
+| **修改** `lib/ui/agentui/agent_list_screen.dart` | 点击服务器 → push 到 SessionListScreen（原来是直接进 ChatScreen） |
+| **修改** `lib/ui/chatui/chat_screen.dart` | 接收 `sessionId` 参数；顶部标题显示会话标题 + 点击弹出会话切换菜单 |
+| **修改** `lib/agents/viewmodels/chat_viewmodel.dart` | 初始化时按 `sessionId` 加载消息；`_serverId` 改为 `_sessionId` |
+| **修改** `lib/agents/repositories/chat_repository.dart` | 消息 CRUD 按 `sessionId` 过滤；`streamReply` 接受 `sessionId` 并设置 `X-Hermes-Session-Id` header |
+| **修改** `lib/protocol/agents_api_client.dart` | `streamChat` 支持传入 `sessionId` 并设为 HTTP header |
+
+### API Header 关键改动
+
+```dart
+// 每次请求携带 sessionId，服务端按 session 隔离上下文
+headers: {
+  'X-Hermes-Session-Id': sessionId,              // 每个会话独立
+  'X-Hermes-Session-Key': 'agent_dance:$serverId', // 同一服务器共享长期记忆
+}
+```
+
+### 路由参数传递
+
+```
+AgentListScreen
+  ↓ onTap(serverId, serverName)
+SessionListScreen(serverId: ..., serverName: ...)
+  ↓ onTap(sessionId, sessionTitle)
+ChatScreen(sessionId: ..., sessionTitle: ..., serverId: ...)
+```
+
+### 验收标准
+- 同一个服务器下创建 3 个会话，各自独立聊天，互不干扰
+- 会话 A 说"我叫张三"，切到会话 B 问"我叫什么"，AI 不知道
+- 长按会话标题可编辑，标题持久化到 SQLite
+- 左滑删除会话，聊天记录同时清除
+- `hermes sessions list` 看到 3 个独立 session
