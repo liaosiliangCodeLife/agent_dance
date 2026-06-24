@@ -621,3 +621,56 @@ ChatScreen(sessionId: ..., sessionTitle: ..., serverId: ...)
 - 长按会话标题可编辑，标题持久化到 SQLite
 - 左滑删除会话，聊天记录同时清除
 - `hermes sessions list` 看到 3 个独立 session
+
+---
+
+## 思考中读秒 (F-139, v3.3)
+
+### 效果
+发送消息后、首 token 到达前，AI 气泡内显示"思考中... 0.0s"，每 100ms 递增，收到第一个 content 或 reasoning token 时停止。
+
+### 实现
+
+**chat_viewmodel.dart**：
+
+```dart
+Timer? _thinkingTimer;
+double _thinkingSeconds = 0;
+final ValueNotifier<String> thinkingLabel = ValueNotifier('');
+
+void _startThinkingTimer() {
+  _thinkingSeconds = 0;
+  _thinkingTimer?.cancel();
+  thinkingLabel.value = '思考中... 0.0s';
+  _thinkingTimer = Timer.periodic(const Duration(milliseconds: 100), (t) {
+    _thinkingSeconds += 0.1;
+    thinkingLabel.value = '思考中... ${_thinkingSeconds.toStringAsFixed(1)}s';
+  });
+}
+
+void _stopThinkingTimer() {
+  _thinkingTimer?.cancel();
+  _thinkingTimer = null;
+  thinkingLabel.value = '';
+}
+```
+
+调用时机：
+- `_startStream()` 开始时调 `_startThinkingTimer()`
+- 收到第一个 `SseToken` 或 `SseReasoning` 时调 `_stopThinkingTimer()`
+
+**chat_screen.dart** 或 **message_bubble.dart**：
+
+在 AI 消息气泡上方加：
+
+```dart
+ValueListenableBuilder<String>(
+  valueListenable: viewModel.thinkingLabel,
+  builder: (_, label, __) => label.isEmpty
+      ? const SizedBox.shrink()
+      : Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(label, style: TextStyle(color: Colors.grey, fontSize: 13, fontStyle: FontStyle.italic)),
+        ),
+)
+```
