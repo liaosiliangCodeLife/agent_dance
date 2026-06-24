@@ -674,3 +674,54 @@ ValueListenableBuilder<String>(
         ),
 )
 ```
+
+---
+
+## 已知 Bug：AI 回复内容重复显示两遍 (2026-06-24)
+
+### 现象
+发送一条消息后，AI 回复的完整内容在聊天界面出现两次。
+
+### 根因分析
+
+**Bug 1：Runs API 流中断后回退到 chat API**
+
+`chat_repository.dart` 的 `streamReply`：
+```dart
+if (userInputForRuns != null) {
+  try {
+    yield* client.streamRunEvents(runId);
+    return;
+  } on AgentsApiException catch (e) {
+    if (e.statusCode != 404 && ...) rethrow;
+  }
+}
+yield* client.streamChat(...);  // 回退再发一遍 → 重复
+```
+
+Runs API SSE 流中途断开时，已发内容到 UI，异常被吞后回退到 chat/completions 再发一遍。
+
+修复：加 `runsYielded` flag，已经出了内容就不再回退。
+
+**Bug 2：`takeStreamingIncrement` 全文重发误判为增量**
+
+```dart
+if (incoming.startsWith(accumulated)) {
+  final suffix = incoming.substring(accumulated.length);
+  return (incoming, suffix.isEmpty ? null : suffix);
+}
+return (accumulated + incoming, incoming);  // 非前缀 → 返回全文 → 重复
+```
+
+Hermes SSE 重发完整文本（换行差异不匹配 accumulated），这行把全文当增量返回。
+
+修复：非前缀情况改为丢弃：
+```dart
+return (accumulated, null);
+```
+
+### 需改动的文件
+| 文件 | 改动 |
+|------|------|
+| `chat_repository.dart` | `streamReply` 加 runsYielded flag |
+| `agents_api_client.dart` | `takeStreamingIncrement` 非前缀返回 null |
