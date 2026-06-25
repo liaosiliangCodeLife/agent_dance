@@ -725,3 +725,24 @@ return (accumulated, null);
 |------|------|
 | `chat_repository.dart` | `streamReply` 加 runsYielded flag |
 | `agents_api_client.dart` | `takeStreamingIncrement` 非前缀返回 null |
+
+---
+
+## 已知 Bug：编辑服务器后密钥丢失 (2026-06-24)
+
+### 现象
+编辑服务器（改名称/地址等）保存后，API 密钥消失，请求报 401。
+
+### 根因
+`server_screens.dart` 的 `initState` 只从 `AgentServer` 对象加载了名称/地址/端口/类型/图标，没有从 `flutter_secure_storage` 加载已有的 API 密钥。
+
+`AgentServer` 模型不包含 `apiKey` 字段（密钥独立存储是安全设计），但编辑页没去读 `secure_storage`，导致 `_apiKeyController` 始终为空。用户保存时如果没重新输入密钥，空字符串就覆盖了旧的密钥。
+
+### 修复
+1. 编辑页 `initState` 从 `flutter_secure_storage` 加载密钥到输入框
+2. 保存时如果输入框为空，保留旧密钥不覆盖
+
+### 需改动的文件
+| 文件 | 改动 |
+|------|------|
+| `server_screens.dart` | `initState` 加载密钥 + 保存时保留旧密钥 |
