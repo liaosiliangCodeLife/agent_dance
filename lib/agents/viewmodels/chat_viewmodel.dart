@@ -11,22 +11,26 @@ import 'package:agent_dance/ui/chatui/widgets/approval_dialog.dart';
 import 'package:agent_dance/utils/logger.dart';
 import 'package:flutter/foundation.dart';
 
-/// 服务器级聊天 ViewModel（F-127）
-/// API 每次只发当前一条 user 消息（F-126）；UI/本地 SQLite 保留完整对话记录。
+/// 会话级聊天 ViewModel
 class ChatViewModel extends ChangeNotifier {
   ChatViewModel({
     required ChatRepository chatRepository,
     required SessionRepository sessionRepository,
+    required String sessionId,
     required String serverId,
     required this.serverName,
+    required this.sessionTitle,
   })  : _chatRepository = chatRepository,
         _sessionRepository = sessionRepository,
+        _sessionId = sessionId,
         _serverId = serverId;
 
   final ChatRepository _chatRepository;
   final SessionRepository _sessionRepository;
+  final String _sessionId;
   final String _serverId;
   final String serverName;
+  String sessionTitle;
   final _log = Logger('ChatViewModel');
 
   List<Message> messages = [];
@@ -38,6 +42,11 @@ class ChatViewModel extends ChangeNotifier {
   Session? currentSession;
   SseApprovalRequest? pendingApproval;
 
+  /// F-139：思考中读秒
+  final ValueNotifier<String> thinkingLabel = ValueNotifier('');
+  Timer? _thinkingTimer;
+  double _thinkingSeconds = 0;
+
   StreamSubscription<SseEvent>? _streamSub;
   Completer<ApprovalChoice>? _approvalCompleter;
   Timer? _backgroundApprovalTimer;
@@ -46,6 +55,7 @@ class ChatViewModel extends ChangeNotifier {
   bool _uiAttached = false;
   bool _isFinishingStream = false;
 
+  String get sessionId => _sessionId;
   String get serverId => _serverId;
   bool get uiAttached => _uiAttached;
   bool get isBusy => chatState != ChatState.idle;
@@ -60,14 +70,22 @@ class ChatViewModel extends ChangeNotifier {
   }
 
   Future<void> init() async {
-    currentSession = await _sessionRepository.ensureServerChat(
-      serverId: _serverId,
-      serverName: serverName,
-    );
-    if (!isBusy) {
-      messages = await _chatRepository.loadMessages(_serverId);
+    currentSession = await _sessionRepository.getSessionById(_sessionId);
+    if (currentSession != null) {
+      sessionTitle = currentSession!.title;
     }
-    await _sessionRepository.clearUnread(_serverId);
+    _log.info('进入会话', {'sessionId': _sessionId, 'title': sessionTitle});
+    if (!isBusy) {
+      messages = await _chatRepository.loadMessages(_sessionId);
+    }
+    await _sessionRepository.clearUnread(_sessionId);
+    notifyListeners();
+  }
+
+  Future<void> updateSessionTitle(String title) async {
+    sessionTitle = title;
+    await _sessionRepository.updateSessionTitle(_sessionId, title);
+    currentSession = await _sessionRepository.getSessionById(_sessionId);
     notifyListeners();
   }
 
@@ -78,7 +96,7 @@ class ChatViewModel extends ChangeNotifier {
     }
     await _sendInternal(() async {
       final userMsg = await _chatRepository.saveUserMessage(
-        serverId: _serverId,
+        sessionId: _sessionId,
         content: trimmed,
       );
       messages.add(userMsg);
@@ -100,7 +118,7 @@ class ChatViewModel extends ChangeNotifier {
     }
     await _sendInternal(() async {
       final userMsg = await _chatRepository.saveUserMessage(
-        serverId: _serverId,
+        sessionId: _sessionId,
         content: text,
         imageBase64s: imageBase64s,
       );
@@ -131,24 +149,60 @@ class ChatViewModel extends ChangeNotifier {
     }
   }
 
+  void _startThinkingTimer() {
+    _thinkingSeconds = 0;
+    _thinkingTimer?.cancel();
+    thinkingLabel.value = '思考中(0.0s).....';
+    _thinkingTimer = Timer.periodic(const Duration(milliseconds: 100), (_) {
+      _thinkingSeconds += 0.1;
+      thinkingLabel.value = '思考中(${_thinkingSeconds.toStringAsFixed(1)}s).....';
+    });
+  }
+
+  void _stopThinkingTimer() {
+    _thinkingTimer?.cancel();
+    _thinkingTimer = null;
+    thinkingLabel.value = '';
+  }
+
   Future<void> _startStream({
     required Map<String, dynamic> currentUserMessage,
     String? userInputForRuns,
   }) async {
     await _streamSub?.cancel();
     _isFinishingStream = false;
+    _startThinkingTimer();
     unawaited(
       BackgroundTaskService.instance.onTaskStarted(
+        sessionId: _sessionId,
         serverId: _serverId,
-        title: serverName,
+        title: sessionTitle.isNotEmpty ? sessionTitle : serverName,
       ),
     );
+
+    // 构建历史（不含刚追加的当前 user 消息，当前轮由 currentUserMessage / userInputForRuns 携带）
+    final conversationHistory = <Map<String, dynamic>>[];
+    for (var i = 0; i < messages.length - 1; i++) {
+      final m = messages[i];
+      if (m.role == 'user') {
+        conversationHistory.add({'role': 'user', 'content': m.content});
+      } else if (m.role == 'assistant') {
+        conversationHistory.add({'role': 'assistant', 'content': m.content});
+      }
+    }
+    _log.info('发送消息', {
+      'sessionId': _sessionId,
+      'serverId': _serverId,
+      'historyLen': conversationHistory.length,
+    });
 
     _streamSub = _chatRepository
         .streamReply(
           serverId: _serverId,
+          sessionId: _sessionId,
           currentUserMessage: currentUserMessage,
           userInputForRuns: userInputForRuns,
+          conversationHistory: conversationHistory,
         )
         .listen(
       (event) {
@@ -156,12 +210,14 @@ class ChatViewModel extends ChangeNotifier {
           return;
         }
         if (event is SseReasoning) {
+          _stopThinkingTimer();
           if (chatState == ChatState.thinking || chatState == ChatState.awaitingApproval) {
             chatState = ChatState.reasoning;
           }
           streamingReasoning += event.text;
           notifyListeners();
         } else if (event is SseToken) {
+          _stopThinkingTimer();
           chatState = ChatState.streaming;
           streamingContent += event.text;
           notifyListeners();
@@ -169,7 +225,7 @@ class ChatViewModel extends ChangeNotifier {
           toolProgressMessage = event.message;
           unawaited(
             BackgroundTaskService.instance.onTaskProgress(
-              serverId: _serverId,
+              sessionId: _sessionId,
               message: event.message,
             ),
           );
@@ -181,6 +237,7 @@ class ChatViewModel extends ChangeNotifier {
         }
       },
       onError: (Object e, StackTrace st) {
+        _stopThinkingTimer();
         _log.error('流式接收失败', e, st);
         if (e is AgentsApiException) {
           _handleError(e.message);
@@ -255,6 +312,7 @@ class ChatViewModel extends ChangeNotifier {
     }
 
     _isFinishingStream = true;
+    _stopThinkingTimer();
     try {
       if (streamingContent.isEmpty && streamingReasoning.isEmpty) {
         chatState = ChatState.idle;
@@ -262,15 +320,18 @@ class ChatViewModel extends ChangeNotifier {
         notifyListeners();
         return;
       }
+      // 兜底：推理模型答案全放 reasoning，content 为空
+      final displayContent =
+          streamingContent.isEmpty ? streamingReasoning : streamingContent;
       final assistant = await _chatRepository.saveAssistantMessage(
-        serverId: _serverId,
-        content: streamingContent,
+        sessionId: _sessionId,
+        content: displayContent,
         reasoningText: streamingReasoning.isEmpty ? null : streamingReasoning,
       );
       messages.add(assistant);
-      final preview = streamingContent.length > 50
-          ? streamingContent.substring(0, 50)
-          : streamingContent;
+      final preview = displayContent.length > 50
+          ? displayContent.substring(0, 50)
+          : displayContent;
       streamingReasoning = '';
       streamingContent = '';
       toolProgressMessage = null;
@@ -279,13 +340,14 @@ class ChatViewModel extends ChangeNotifier {
 
       unawaited(
         BackgroundTaskService.instance.onTaskFinished(
+          sessionId: _sessionId,
           serverId: _serverId,
-          serverTitle: serverName,
+          serverTitle: sessionTitle.isNotEmpty ? sessionTitle : serverName,
           preview: preview,
           uiAttached: _uiAttached,
         ),
       );
-      ChatTaskRegistry.onTaskFinished(_serverId);
+      ChatTaskRegistry.onTaskFinished(_sessionId);
     } finally {
       _isFinishingStream = false;
     }
@@ -293,6 +355,7 @@ class ChatViewModel extends ChangeNotifier {
 
   void stopGeneration() {
     _streamSub?.cancel();
+    _stopThinkingTimer();
     if (_approvalCompleter != null && !_approvalCompleter!.isCompleted) {
       _approvalCompleter!.complete(ApprovalChoice.deny);
     }
@@ -309,6 +372,7 @@ class ChatViewModel extends ChangeNotifier {
   }
 
   void _handleError(String message) {
+    _stopThinkingTimer();
     errorMessage = message;
     chatState = ChatState.idle;
     streamingReasoning = '';
@@ -329,6 +393,7 @@ class ChatViewModel extends ChangeNotifier {
       return;
     }
     _disposed = true;
+    _stopThinkingTimer();
     _backgroundApprovalTimer?.cancel();
     _streamSub?.cancel();
     if (_approvalCompleter != null && !_approvalCompleter!.isCompleted) {
@@ -339,6 +404,7 @@ class ChatViewModel extends ChangeNotifier {
   @override
   void dispose() {
     disposeInternal();
+    thinkingLabel.dispose();
     super.dispose();
   }
 }

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:agent_dance/agents/database/app_database.dart';
+import 'package:agent_dance/agents/models/session.dart';
 import 'package:agent_dance/agents/repositories/chat_repository.dart';
 import 'package:agent_dance/services/background_task_service.dart';
 import 'package:agent_dance/services/chat_task_registry.dart';
@@ -58,11 +59,27 @@ class AppServices {
   Future<void> openChat({
     required String serverId,
     required String serverName,
+    String? sessionId,
+    String? sessionTitle,
   }) async {
     final server = await serverRepository.getServerById(serverId);
+    if (server == null) {
+      _log.warn('服务器不存在', {'serverId': serverId});
+      return;
+    }
+
+    Session? session;
+    if (sessionId != null && sessionId.isNotEmpty) {
+      session = await sessionRepository.getSessionById(sessionId);
+    }
+    session ??= (await sessionRepository.getSessionsByServer(serverId)).firstOrNull;
+    session ??= await sessionRepository.createSession(serverId: serverId);
+
     final vm = ChatTaskRegistry.getOrCreate(
+      sessionId: session.id,
       serverId: serverId,
       serverName: serverName,
+      sessionTitle: session.title,
       chatRepository: chatRepository,
       sessionRepository: sessionRepository,
     );
@@ -71,7 +88,7 @@ class AppServices {
 
     final nav = navigatorKey.currentState;
     if (nav == null) {
-      _log.warn('导航器未就绪，无法打开对话', {'serverId': serverId});
+      _log.warn('导航器未就绪，无法打开对话', {'serverId': serverId, 'sessionId': session.id});
       return;
     }
 
@@ -79,9 +96,13 @@ class AppServices {
       MaterialPageRoute<void>(
         builder: (_) => ChatScreen(
           viewModel: vm,
+          serverId: serverId,
           serverName: serverName,
-          serverIconKey: server?.iconKey,
-          isServerOnline: server?.isOnline ?? true,
+          sessionTitle: session!.title,
+          serverIconKey: server.iconKey,
+          isServerOnline: server.isOnline,
+          sessionRepository: sessionRepository,
+          chatRepository: chatRepository,
         ),
       ),
     );
@@ -99,13 +120,13 @@ class AppServices {
 
     try {
       final data = jsonDecode(payload) as Map<String, dynamic>;
-      final serverId =
-          data['serverId']?.toString() ?? data['sessionId']?.toString();
+      final serverId = data['serverId']?.toString();
+      final sessionId = data['sessionId']?.toString();
       final serverName = data['serverName']?.toString() ?? '智能体';
       if (serverId == null || serverId.isEmpty) {
         return;
       }
-      openChat(serverId: serverId, serverName: serverName);
+      openChat(serverId: serverId, serverName: serverName, sessionId: sessionId);
     } catch (e, st) {
       _log.error('解析通知 payload 失败', e, st);
     }

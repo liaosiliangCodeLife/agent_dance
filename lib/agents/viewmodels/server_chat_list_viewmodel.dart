@@ -37,13 +37,12 @@ class ServerChatListViewModel extends ChangeNotifier {
       await _serverRepository.refreshAllServerStatus();
       servers = await _serverRepository.getAllServers();
       final sessions = await _sessionRepository.getAllSessions();
-      lastMessagePreviews
-        ..clear()
-        ..addEntries(
-          sessions.map(
-            (s) => MapEntry(s.serverId, s.lastMessagePreview),
-          ),
-        );
+      lastMessagePreviews.clear();
+      for (final session in sessions) {
+        if (!lastMessagePreviews.containsKey(session.serverId)) {
+          lastMessagePreviews[session.serverId] = session.lastMessagePreview;
+        }
+      }
     } catch (e, st) {
       _log.error('加载服务器对话入口失败', e, st);
     } finally {

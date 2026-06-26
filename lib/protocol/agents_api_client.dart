@@ -80,6 +80,8 @@ class AgentsApiClient {
   /// 流式对话
   Stream<SseEvent> streamChat({
     required List<Map<String, dynamic>> messages,
+    String? sessionId,
+    String? sessionKey,
     http.Client? client,
   }) {
     final sseClient = AgentsSseClient(
@@ -88,7 +90,11 @@ class AgentsApiClient {
       model: model,
       client: client,
     );
-    return sseClient.streamChat(messages: messages);
+    return sseClient.streamChat(
+      messages: messages,
+      sessionId: sessionId,
+      sessionKey: sessionKey,
+    );
   }
 
   /// 启动 Runs（文本对话优先，支持指令审批）
@@ -98,11 +104,17 @@ class AgentsApiClient {
     required List<Map<String, dynamic>> conversationHistory,
     required String sessionId,
   }) async {
+    _log.info('Runs API 请求', {
+      'sessionId': sessionId,
+      'sessionKey': sessionKey,
+      'historyLen': conversationHistory.length,
+    });
     final response = await http
         .post(
           _uri('/v1/runs'),
           headers: {
             ..._headers,
+            'X-Hermes-Session-Id': sessionId,
             'X-Hermes-Session-Key': sessionKey,
           },
           body: jsonEncode({
@@ -182,13 +194,27 @@ class AgentsSseClient {
 
   Stream<SseEvent> streamChat({
     required List<Map<String, dynamic>> messages,
+    String? sessionId,
+    String? sessionKey,
   }) async* {
     final request = http.Request('POST', Uri.parse('$baseUrl/v1/chat/completions'));
-    request.headers.addAll({
+    final headers = <String, String>{
       'Authorization': 'Bearer $apiKey',
       'Content-Type': 'application/json',
       'Accept': 'text/event-stream',
+    };
+    if (sessionId != null && sessionId.isNotEmpty) {
+      headers['X-Hermes-Session-Id'] = sessionId;
+    }
+    if (sessionKey != null && sessionKey.isNotEmpty) {
+      headers['X-Hermes-Session-Key'] = sessionKey;
+    }
+    _log.info('Chat Completions 请求', {
+      'sessionId': sessionId ?? '',
+      'sessionKey': sessionKey ?? '',
+      'messageCount': messages.length,
     });
+    request.headers.addAll(headers);
     request.body = jsonEncode({
       'model': model,
       'messages': messages,
@@ -384,7 +410,13 @@ class AgentsSseClient {
               );
               break;
             case 'run.completed':
-              final output = eventJson['output']?.toString() ?? '';
+              var output = eventJson['output']?.toString() ?? '';
+              // 兜底：推理模型答案全放 reasoning，output 为空
+              if (output.isEmpty &&
+                  accumulatedContent.isEmpty &&
+                  accumulatedReasoning.isNotEmpty) {
+                output = accumulatedReasoning;
+              }
               final outputInc = takeStreamingIncrement(output, accumulatedContent);
               accumulatedContent = outputInc.$1;
               if (outputInc.$2 != null) {

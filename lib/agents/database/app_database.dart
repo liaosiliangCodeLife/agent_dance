@@ -107,6 +107,13 @@ class AppDatabase extends _$AppDatabase {
         .get();
   }
 
+  Future<List<ChatSession>> getSessionsByServer(String serverId) {
+    return (select(chatSessions)
+          ..where((t) => t.serverId.equals(serverId))
+          ..orderBy([(t) => OrderingTerm.desc(t.updatedAt)]))
+        .get();
+  }
+
   Future<ChatSession?> getSessionById(String id) {
     return (select(chatSessions)..where((t) => t.id.equals(id))).getSingleOrNull();
   }

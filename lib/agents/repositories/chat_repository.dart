@@ -178,14 +178,43 @@ class SessionRepository {
     );
   }
 
+  Future<List<Session>> getSessionsByServer(String serverId) async {
+    final rows = await _db.getSessionsByServer(serverId);
+    final server = await _db.getServerById(serverId);
+    final isOnline = server?.isOnline ?? false;
+    return rows
+        .map(
+          (row) => Session(
+            id: row.id,
+            serverId: row.serverId,
+            title: row.title,
+            createdAt: DateTime.fromMillisecondsSinceEpoch(row.createdAt),
+            updatedAt: DateTime.fromMillisecondsSinceEpoch(row.updatedAt),
+            messageCount: row.messageCount,
+            lastMessagePreview: row.lastMessagePreview,
+            unreadCount: row.unreadCount,
+            isOnline: isOnline,
+          ),
+        )
+        .toList();
+  }
+
+  static String defaultSessionTitle() {
+    final now = DateTime.now();
+    final date =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    return '新对话 $date';
+  }
+
   Future<Session> createSession({required String serverId, String? title}) async {
     final now = DateTime.now();
     final id = _uuid.v4();
+    final sessionTitle = title ?? defaultSessionTitle();
     await _db.upsertSession(
       ChatSessionsCompanion(
         id: Value(id),
         serverId: Value(serverId),
-        title: Value(title ?? '新对话'),
+        title: Value(sessionTitle),
         createdAt: Value(now.millisecondsSinceEpoch),
         updatedAt: Value(now.millisecondsSinceEpoch),
       ),
@@ -193,45 +222,28 @@ class SessionRepository {
     return Session(
       id: id,
       serverId: serverId,
-      title: title ?? '新对话',
+      title: sessionTitle,
       createdAt: now,
       updatedAt: now,
     );
   }
 
-  Future<Session?> getSessionForServer(String serverId) async {
-    return getSessionById(serverId);
-  }
-
-  /// 确保每个服务器有且仅有一个对话页（sessionId = serverId）
-  Future<Session> ensureServerChat({
-    required String serverId,
-    required String serverName,
-  }) async {
-    final existing = await getSessionById(serverId);
-    if (existing != null) {
-      final server = await _db.getServerById(serverId);
-      return existing.copyWith(
-        title: serverName,
-        isOnline: server?.isOnline ?? false,
-      );
+  Future<void> updateSessionTitle(String sessionId, String title) async {
+    final existing = await _db.getSessionById(sessionId);
+    if (existing == null) {
+      return;
     }
-    final now = DateTime.now();
     await _db.upsertSession(
       ChatSessionsCompanion(
-        id: Value(serverId),
-        serverId: Value(serverId),
-        title: Value(serverName),
-        createdAt: Value(now.millisecondsSinceEpoch),
-        updatedAt: Value(now.millisecondsSinceEpoch),
+        id: Value(sessionId),
+        serverId: Value(existing.serverId),
+        title: Value(title),
+        createdAt: Value(existing.createdAt),
+        updatedAt: Value(DateTime.now().millisecondsSinceEpoch),
+        messageCount: Value(existing.messageCount),
+        lastMessagePreview: Value(existing.lastMessagePreview),
+        unreadCount: Value(existing.unreadCount),
       ),
-    );
-    return Session(
-      id: serverId,
-      serverId: serverId,
-      title: serverName,
-      createdAt: now,
-      updatedAt: now,
     );
   }
 
@@ -282,9 +294,10 @@ class ChatRepository {
   final SessionRepository _sessionRepo;
   final ServerRepository _serverRepo;
   final _uuid = const Uuid();
+  final _log = Logger('ChatRepository');
 
-  Future<List<Message>> loadMessages(String serverId) async {
-    final rows = await _db.getMessagesBySession(serverId);
+  Future<List<Message>> loadMessages(String sessionId) async {
+    final rows = await _db.getMessagesBySession(sessionId);
     return rows
         .map(
           (row) => Message(
@@ -302,13 +315,13 @@ class ChatRepository {
   }
 
   Future<Message> saveUserMessage({
-    required String serverId,
+    required String sessionId,
     required String content,
     List<String>? imageBase64s,
   }) async {
     final message = Message(
       id: _uuid.v4(),
-      sessionId: serverId,
+      sessionId: sessionId,
       role: 'user',
       content: content,
       imageBase64s: imageBase64s,
@@ -317,7 +330,7 @@ class ChatRepository {
     await _db.insertMessage(
       ChatMessagesCompanion(
         id: Value(message.id),
-        sessionId: Value(serverId),
+        sessionId: Value(sessionId),
         role: Value('user'),
         content: Value(content),
         imagesJson: Value(DbMappers.encodeImages(imageBase64s)),
@@ -329,20 +342,20 @@ class ChatRepository {
         ? content
         : (imageBase64s != null && imageBase64s.isNotEmpty ? '[图片]' : '');
     await _sessionRepo.updateSessionMeta(
-      sessionId: serverId,
+      sessionId: sessionId,
       lastPreview: preview,
     );
     return message;
   }
 
   Future<Message> saveAssistantMessage({
-    required String serverId,
+    required String sessionId,
     required String content,
     String? reasoningText,
   }) async {
     final message = Message(
       id: _uuid.v4(),
-      sessionId: serverId,
+      sessionId: sessionId,
       role: 'assistant',
       content: content,
       reasoningText: reasoningText,
@@ -351,7 +364,7 @@ class ChatRepository {
     await _db.insertMessage(
       ChatMessagesCompanion(
         id: Value(message.id),
-        sessionId: Value(serverId),
+        sessionId: Value(sessionId),
         role: Value('assistant'),
         content: Value(content),
         reasoningText: Value(reasoningText),
@@ -359,7 +372,7 @@ class ChatRepository {
       ),
     );
     await _sessionRepo.updateSessionMeta(
-      sessionId: serverId,
+      sessionId: sessionId,
       lastPreview: content.length > 50 ? content.substring(0, 50) : content,
       unreadDelta: 1,
     );
@@ -389,33 +402,54 @@ class ChatRepository {
     return {'role': 'user', 'content': content};
   }
 
-  /// F-126：API 请求只带当前一条 user 消息，不携带本地历史（上下文由服务端 session 维护）
+  /// API 请求携带 sessionId + 对话历史；Runs 失败时降级 chat/completions 也带历史
   Stream<SseEvent> streamReply({
     required String serverId,
+    required String sessionId,
     required Map<String, dynamic> currentUserMessage,
     String? userInputForRuns,
+    List<Map<String, dynamic>> conversationHistory = const [],
   }) async* {
     final client = await _serverRepo.createApiClient(serverId);
-    final apiMessages = [currentUserMessage];
+    final sessionKey = 'agent_dance:$serverId';
+    _log.info('streamReply', {
+      'sessionId': sessionId,
+      'sessionKey': sessionKey,
+      'historyLen': conversationHistory.length,
+      'useRuns': userInputForRuns != null && userInputForRuns.isNotEmpty,
+    });
 
     if (userInputForRuns != null && userInputForRuns.isNotEmpty) {
+      var runsYielded = false;
       try {
         final runId = await client.startRun(
-          sessionKey: serverId,
+          sessionKey: sessionKey,
           input: userInputForRuns,
-          conversationHistory: const [],
-          sessionId: serverId,
+          conversationHistory: conversationHistory,
+          sessionId: sessionId,
         );
-        yield* client.streamRunEvents(runId);
+        await for (final event in client.streamRunEvents(runId)) {
+          runsYielded = true;
+          yield event;
+        }
         return;
       } on AgentsApiException catch (e) {
+        if (runsYielded) {
+          return;
+        }
         if (e.statusCode != 404 && e.statusCode != 501 && e.statusCode != 405) {
           rethrow;
         }
+        _log.info('Runs API 不可用，降级 Chat Completions', {'sessionId': sessionId});
       }
     }
 
-    yield* client.streamChat(messages: apiMessages);
+    final allMessages = [...conversationHistory, currentUserMessage];
+    yield* client.streamChat(
+      messages: allMessages,
+      sessionId: sessionId,
+      sessionKey: sessionKey,
+    );
   }
 
   Future<void> submitApproval({

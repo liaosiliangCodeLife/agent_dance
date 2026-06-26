@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:agent_dance/agents/models/chat_state.dart';
+import 'package:agent_dance/agents/repositories/chat_repository.dart';
 import 'package:agent_dance/agents/viewmodels/chat_viewmodel.dart';
 import 'package:agent_dance/config/app_config.dart';
 import 'package:agent_dance/services/app_services.dart';
@@ -17,15 +18,23 @@ class ChatScreen extends StatefulWidget {
   const ChatScreen({
     super.key,
     required this.viewModel,
+    required this.serverId,
     required this.serverName,
+    required this.sessionTitle,
     this.serverIconKey,
     this.isServerOnline = true,
+    required this.sessionRepository,
+    required this.chatRepository,
   });
 
   final ChatViewModel viewModel;
+  final String serverId;
   final String serverName;
+  final String sessionTitle;
   final String? serverIconKey;
   final bool isServerOnline;
+  final SessionRepository sessionRepository;
+  final ChatRepository chatRepository;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -92,7 +101,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return;
     }
     final server = await AppServices.instance.serverRepository
-        .getServerById(widget.viewModel.serverId);
+        .getServerById(widget.serverId);
     if (server != null && mounted) {
       setState(() => _serverIconKey = server.iconKey);
     }
@@ -113,7 +122,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _inputFocusNode.removeListener(_onInputFocusChanged);
     _inputFocusNode.dispose();
     _textController.dispose();
-    ChatTaskRegistry.onScreenClosed(widget.viewModel.serverId);
+    ChatTaskRegistry.onScreenClosed(widget.viewModel.sessionId);
     _scrollController.dispose();
     super.dispose();
   }
@@ -193,17 +202,22 @@ class _ChatScreenState extends State<ChatScreen> {
       // 手动用 viewInsets 顶起输入栏，避免 bottomNavigationBar 被键盘盖住
       resizeToAvoidBottomInset: false,
       appBar: AppBar(
-        title: Row(
-          children: [
-            ServerIconAvatar(iconKey: _serverIconKey, radius: 16),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                vm.currentSession?.title ?? widget.serverName,
-                overflow: TextOverflow.ellipsis,
+        title: GestureDetector(
+          onTap: _showSessionSwitcher,
+          onLongPress: _renameCurrentSession,
+          child: Row(
+            children: [
+              ServerIconAvatar(iconKey: _serverIconKey, radius: 16),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  vm.sessionTitle.isNotEmpty ? vm.sessionTitle : widget.sessionTitle,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-          ],
+              const Icon(Icons.arrow_drop_down, size: 20),
+            ],
+          ),
         ),
       ),
       body: Column(
@@ -269,6 +283,22 @@ class _ChatScreenState extends State<ChatScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          ValueListenableBuilder<String>(
+            valueListenable: vm.thinkingLabel,
+            builder: (_, label, __) => label.isEmpty
+                ? const SizedBox.shrink()
+                : Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: Colors.grey,
+                        fontSize: 13,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+          ),
           if (vm.streamingReasoning.isNotEmpty)
             ThinkingSection(
               reasoningText: vm.streamingReasoning,
@@ -276,14 +306,127 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           if (vm.streamingContent.isNotEmpty)
             StreamingText(text: vm.streamingContent)
-          else if (vm.chatState == ChatState.thinking ||
-              vm.chatState == ChatState.awaitingApproval)
-            Text(
-              vm.chatState == ChatState.awaitingApproval ? '等待审批...' : '思考中...',
-            ),
+          else if (vm.streamingReasoning.isNotEmpty)
+            StreamingText(text: vm.streamingReasoning)
+          else if (vm.chatState == ChatState.awaitingApproval)
+            const Text('等待审批...'),
         ],
       ),
     );
+  }
+
+  Future<void> _renameCurrentSession() async {
+    final controller = TextEditingController(text: widget.viewModel.sessionTitle);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('修改会话标题'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '输入新标题'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('取消')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (newTitle != null && newTitle.isNotEmpty && mounted) {
+      await widget.viewModel.updateSessionTitle(newTitle);
+    }
+  }
+
+  Future<void> _showSessionSwitcher() async {
+    final sessions = await widget.sessionRepository.getSessionsByServer(widget.serverId);
+    if (!mounted) {
+      return;
+    }
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text('切换会话 · ${widget.serverName}'),
+              trailing: IconButton(
+                icon: const Icon(Icons.add),
+                onPressed: () => Navigator.pop(ctx, '__new__'),
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: sessions.length,
+                itemBuilder: (context, index) {
+                  final session = sessions[index];
+                  final isCurrent = session.id == widget.viewModel.sessionId;
+                  return ListTile(
+                    title: Text(session.title),
+                    subtitle: session.lastMessagePreview.isNotEmpty
+                        ? Text(session.lastMessagePreview, maxLines: 1, overflow: TextOverflow.ellipsis)
+                        : null,
+                    trailing: isCurrent ? const Icon(Icons.check) : null,
+                    onTap: () => Navigator.pop(ctx, session.id),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    if (selected == '__new__') {
+      final session = await widget.sessionRepository.createSession(serverId: widget.serverId);
+      if (!mounted) {
+        return;
+      }
+      _switchToSession(session.id, session.title);
+      return;
+    }
+    if (selected != widget.viewModel.sessionId) {
+      final session = sessions.firstWhere((s) => s.id == selected);
+      _switchToSession(session.id, session.title);
+    }
+  }
+
+  void _switchToSession(String sessionId, String sessionTitle) {
+    final chatVm = ChatTaskRegistry.getOrCreate(
+      sessionId: sessionId,
+      serverId: widget.serverId,
+      serverName: widget.serverName,
+      sessionTitle: sessionTitle,
+      chatRepository: widget.chatRepository,
+      sessionRepository: widget.sessionRepository,
+    );
+    unawaited(chatVm.init().then((_) {
+      if (!mounted) {
+        return;
+      }
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(
+          builder: (_) => ChatScreen(
+            viewModel: chatVm,
+            serverId: widget.serverId,
+            serverName: widget.serverName,
+            sessionTitle: sessionTitle,
+            serverIconKey: widget.serverIconKey ?? _serverIconKey,
+            isServerOnline: widget.isServerOnline,
+            sessionRepository: widget.sessionRepository,
+            chatRepository: widget.chatRepository,
+          ),
+        ),
+      );
+    }));
   }
 
   Widget _buildInputBar(ChatViewModel vm, bool isBusy) {

@@ -102,10 +102,11 @@ class BackgroundTaskService {
   }
 
   Future<void> onTaskStarted({
+    required String sessionId,
     required String serverId,
     required String title,
   }) async {
-    _activeSessionId = serverId;
+    _activeSessionId = sessionId;
     if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) {
       return;
     }
@@ -130,10 +131,10 @@ class BackgroundTaskService {
   }
 
   Future<void> onTaskProgress({
-    required String serverId,
+    required String sessionId,
     required String message,
   }) async {
-    if (_activeSessionId != serverId || kIsWeb) {
+    if (_activeSessionId != sessionId || kIsWeb) {
       return;
     }
     try {
@@ -147,12 +148,13 @@ class BackgroundTaskService {
   }
 
   Future<void> onTaskFinished({
+    required String sessionId,
     required String serverId,
     required String serverTitle,
     required String preview,
     required bool uiAttached,
   }) async {
-    if (_activeSessionId == serverId) {
+    if (_activeSessionId == sessionId) {
       _activeSessionId = null;
     }
     if (kIsWeb || !(Platform.isAndroid || Platform.isIOS)) {
@@ -171,6 +173,7 @@ class BackgroundTaskService {
       return;
     }
     await showCompletionNotification(
+      sessionId: sessionId,
       serverId: serverId,
       serverTitle: serverTitle,
       preview: preview,
@@ -191,6 +194,7 @@ class BackgroundTaskService {
   }
 
   Future<void> showCompletionNotification({
+    required String sessionId,
     required String serverId,
     required String serverTitle,
     required String preview,
@@ -200,9 +204,10 @@ class BackgroundTaskService {
     }
     final payload = jsonEncode({
       'serverId': serverId,
+      'sessionId': sessionId,
       'serverName': serverTitle,
     });
-    final id = _completeNotificationBaseId + serverId.hashCode.abs() % 10000;
+    final id = _completeNotificationBaseId + sessionId.hashCode.abs() % 10000;
     await _notifications.show(
       id,
       '任务已完成',

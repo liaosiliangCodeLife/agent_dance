@@ -2,8 +2,8 @@ import 'package:agent_dance/agents/models/chat_state.dart';
 import 'package:agent_dance/agents/models/server.dart';
 import 'package:agent_dance/agents/repositories/chat_repository.dart';
 import 'package:agent_dance/agents/viewmodels/app_viewmodels.dart';
-import 'package:agent_dance/services/chat_task_registry.dart';
-import 'package:agent_dance/ui/chatui/chat_screen.dart';
+import 'package:agent_dance/config/app_config.dart';
+import 'package:agent_dance/ui/sessionui/session_list_screen.dart';
 import 'package:agent_dance/ui/common/avatar_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -35,6 +35,7 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
   AgentType _agentType = AgentType.hermes;
   String _iconKey = ServerIconCatalog.defaultIconKey;
   bool _saving = false;
+  String? _existingApiKey;
 
   @override
   void initState() {
@@ -46,7 +47,21 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
       _portController.text = '${server.port}';
       _agentType = server.agentType;
       _iconKey = server.iconKey;
+      _loadExistingApiKey(server.id);
     }
+  }
+
+  Future<void> _loadExistingApiKey(String serverId) async {
+    final key = await AppConfig.readServerApiKey(serverId);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _existingApiKey = key;
+      if (key != null && key.isNotEmpty) {
+        _apiKeyController.text = key;
+      }
+    });
   }
 
   @override
@@ -153,10 +168,14 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
   }
 
   Future<void> _testConnection() async {
+    var apiKey = _apiKeyController.text.trim();
+    if (apiKey.isEmpty && widget.server != null) {
+      apiKey = _existingApiKey ?? '';
+    }
     await widget.viewModel.testConnection(
       host: _hostController.text.trim(),
       port: int.tryParse(_portController.text.trim()) ?? 8642,
-      apiKey: _apiKeyController.text.trim(),
+      apiKey: apiKey,
     );
     if (mounted) {
       setState(() {});
@@ -166,13 +185,18 @@ class _ServerEditScreenState extends State<ServerEditScreen> {
   Future<void> _save() async {
     setState(() => _saving = true);
     try {
+      var apiKey = _apiKeyController.text.trim();
+      // 编辑时输入框为空则保留原密钥
+      if (apiKey.isEmpty && widget.server != null) {
+        apiKey = _existingApiKey ?? '';
+      }
       final server = await widget.viewModel.saveServer(
         id: widget.server?.id,
         name: _nameController.text.trim(),
         host: _hostController.text.trim(),
         port: int.tryParse(_portController.text.trim()) ?? 8642,
         agentType: _agentType,
-        apiKey: _apiKeyController.text.trim(),
+        apiKey: apiKey,
         iconKey: _iconKey,
       );
       if (!mounted) {
@@ -296,28 +320,15 @@ class _ServerListScreenState extends State<ServerListScreen> {
   }
 
   Future<void> _startChat(AgentServer server) async {
-    final chatVm = ChatTaskRegistry.getOrCreate(
-      serverId: server.id,
-      serverName: server.name,
-      chatRepository: widget.chatRepository,
-      sessionRepository: widget.sessionRepository,
-    );
-    await chatVm.init();
     if (!mounted) {
       return;
     }
-    if (!server.isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${server.name} 当前离线，可查看记录，发送需联网')),
-      );
-    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChatScreen(
-          viewModel: chatVm,
-          serverName: server.name,
-          serverIconKey: server.iconKey,
-          isServerOnline: server.isOnline,
+        builder: (_) => SessionListScreen(
+          server: server,
+          sessionRepository: widget.sessionRepository,
+          chatRepository: widget.chatRepository,
         ),
       ),
     );

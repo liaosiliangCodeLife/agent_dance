@@ -1,9 +1,8 @@
 import 'package:agent_dance/agents/models/server.dart';
 import 'package:agent_dance/agents/repositories/chat_repository.dart';
 import 'package:agent_dance/agents/viewmodels/server_chat_list_viewmodel.dart';
-import 'package:agent_dance/services/chat_task_registry.dart';
 import 'package:agent_dance/ui/common/avatar_widgets.dart';
-import 'package:agent_dance/ui/chatui/chat_screen.dart';
+import 'package:agent_dance/ui/sessionui/session_list_screen.dart';
 import 'package:flutter/material.dart';
 
 /// 智能体 Tab：服务器级对话入口（F-127）
@@ -93,24 +92,14 @@ class _AgentListScreenState extends State<AgentListScreen> {
                     return _ServerChatTile(
                       server: server,
                       lastPreview: vm.previewFor(server.id),
-                      onTap: () => _openChat(server),
+                      onTap: () => _openSessionList(server),
                     );
                   },
                 ),
     );
   }
 
-  Future<void> _openChat(AgentServer server) async {
-    final chatVm = ChatTaskRegistry.getOrCreate(
-      serverId: server.id,
-      serverName: server.name,
-      chatRepository: widget.chatRepository,
-      sessionRepository: widget.sessionRepository,
-    );
-    await chatVm.init();
-    if (!mounted) {
-      return;
-    }
+  Future<void> _openSessionList(AgentServer server) async {
     if (!server.isOnline) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('${server.name} 当前离线，可查看记录，发送需联网')),
@@ -118,11 +107,10 @@ class _AgentListScreenState extends State<AgentListScreen> {
     }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ChatScreen(
-          viewModel: chatVm,
-          serverName: server.name,
-          serverIconKey: server.iconKey,
-          isServerOnline: server.isOnline,
+        builder: (_) => SessionListScreen(
+          server: server,
+          sessionRepository: widget.sessionRepository,
+          chatRepository: widget.chatRepository,
         ),
       ),
     );
