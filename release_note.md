@@ -4,6 +4,33 @@
 
 ---
 
+## 0.0.2 — 上下文修复 (2026-06-26)
+
+### Bug 修复
+
+| # | 问题 | 修复 |
+|---|------|------|
+| B-004 | 推理模型(DeepSeek-v4-pro)调用工具后只显示思考过程，不显示正式回复 | `run.completed` output 为空时用 reasoning 补位；流式渲染兜底；消息保存兜底 |
+| B-005 | `takeStreamingIncrement` 增量 token 被静默丢弃，正文只显示第一个字 | 恢复原始逻辑 `return (accumulated + incoming, incoming)` |
+| B-006 | 退出 App 重进后上下文丢失 | 每次请求携带 `conversationHistory`（从本地 DB 加载历史消息构建） |
+| B-007 | Hermes v0.17 `/v1/runs` 不自动注入 session 历史 | App 端始终传 `conversationHistory`，不依赖服务端自动加载 |
+
+### 架构变更
+
+- **Session 管理**：从"服务器维度单对话"重构为"会话维度多对话"
+- 新增 `SessionListScreen`（会话列表页），支持创建/切换/重命名/删除会话
+- `ChatTaskRegistry` 按 `sessionId` 索引（原 `serverId`）
+- `ChatViewModel` 新增 `sessionId`/`sessionTitle` 参数
+- API 请求增加 `X-Hermes-Session-Id` / `X-Hermes-Session-Key` header
+
+### 根因分析（本次调试关键发现）
+
+- **Hermes v0.17 `/v1/runs` 不自动注入 session 历史消息到模型上下文**。模型只能通过 `session_search` 工具检索（搜全量记忆而非当前 session），导致上下文歪到其他 session。
+- **TUI（channel hermes）正常**是因为走 Gateway 进程内 session，直接注入全量历史；API Server 路径不同。
+- **解法**：客户端必须自己传 `conversation_history`，不能依赖 `/v1/runs` 自动加载。
+
+---
+
 ## 0.0.1 — 初始版本 (2026-06-15)
 
 ### 功能概述
